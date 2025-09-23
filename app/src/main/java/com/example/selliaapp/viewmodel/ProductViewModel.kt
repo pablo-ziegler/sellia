@@ -8,6 +8,7 @@ import com.example.selliaapp.data.local.entity.ProductEntity
 import com.example.selliaapp.data.model.ImportResult
 import com.example.selliaapp.data.remote.off.OffResult
 import com.example.selliaapp.data.remote.off.OpenFoodFactsRepository
+import com.example.selliaapp.repository.IProductRepository
 import com.example.selliaapp.repository.ProductRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -28,7 +29,7 @@ data class AutoFillUiState(
 
 @HiltViewModel
 class ProductViewModel @Inject constructor(
-    private val repo: ProductRepository,
+    private val repo: IProductRepository,
     private val offRepo: OpenFoodFactsRepository
 
 ) : ViewModel() {

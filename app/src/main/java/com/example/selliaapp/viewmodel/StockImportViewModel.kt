@@ -9,7 +9,8 @@ import com.example.selliaapp.data.csv.CsvUtils
 import com.example.selliaapp.data.csv.ProductCsvImporter
 import com.example.selliaapp.data.model.ImportResult
 import com.example.selliaapp.di.IoDispatcher
-import com.example.selliaapp.repository.ProductRepository
+import com.example.selliaapp.repository.IProductRepository
+import com.example.selliaapp.repository.ProductRepository // Solo para el tipo ImportStrategy en la firma pública
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
@@ -21,17 +22,15 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
- * VM para el wizard de importación:
- * - preview: primeras filas
- * - dryRun: simulación (sin persistir)
- * - importing: bandera de importación real
+ * [NUEVO] VM para el wizard de importación migrado a IProductRepository.
+ * Mantiene firmas públicas y comportamiento. Toda la lógica real sigue en tu ProductRepository
+ * a través del adaptador (IProductRepositoryAdapter).
  */
 @HiltViewModel
 class StockImportViewModel @Inject constructor(
-    private val repo: ProductRepository,
-    @IoDispatcher private val io: CoroutineDispatcher,   // <-- usar el qualifier, SIN valor default
-    @ApplicationContext private val appContext: Context   // <-- calificado
-
+    private val repo: IProductRepository,
+    @IoDispatcher private val io: CoroutineDispatcher,   // qualifier de IO
+    @ApplicationContext private val appContext: Context  // contexto app
 ) : ViewModel() {
 
     data class DryRunResult(
@@ -53,8 +52,9 @@ class StockImportViewModel @Inject constructor(
     val importing: StateFlow<Boolean> = _importing
 
     private var currentUri: Uri? = null
-    private var cachedRows: List<ProductCsvImporter.Row> = emptyList()
+    private var cachedRows: List<ProductCsvImporter.Row> = emptyList() // reservado si luego querés flujo avanzado
 
+    /** Carga preview (primeras 20 filas) del CSV seleccionado. */
     fun loadPreview(uri: Uri) {
         currentUri = uri
         viewModelScope.launch {
@@ -64,6 +64,7 @@ class StockImportViewModel @Inject constructor(
         }
     }
 
+    /** Simulación de importación sin escribir en DB. */
     fun runDryRun() {
         viewModelScope.launch {
             val uri = currentUri ?: return@launch
@@ -72,23 +73,19 @@ class StockImportViewModel @Inject constructor(
         }
     }
 
+    /** Encola importación real en background (WorkManager). */
     fun doImport() {
         viewModelScope.launch {
             _importing.value = true
             val uri = currentUri ?: return@launch
-            repo.importProductsInBackground(appContext, uri) // WorkManager
+            repo.importProductsInBackground(appContext, uri)
             _importing.value = false
         }
     }
 
     /**
-     * Importa desde un CSV referenciado por [uri].
-     * Usa la estrategia que le pasás desde la UI (Append / Upsert).
-     *
-     * @param context Se usa sólo para resolver el ContentResolver.
-     * @param uri Uri del documento CSV (Storage Access Framework).
-     * @param strategy Estrategia de importación (Append por defecto).
-     * @param onCompleted Callback en Main con el resultado (ImportResult).
+     * Importa desde un CSV referenciado por [uri] con la estrategia indicada.
+     * Mantiene la firma pública con ProductRepository.ImportStrategy para no romper la UI.
      */
     fun importFromCsv(
         context: Context,
@@ -104,6 +101,4 @@ class StockImportViewModel @Inject constructor(
             }
         }
     }
-
-
 }

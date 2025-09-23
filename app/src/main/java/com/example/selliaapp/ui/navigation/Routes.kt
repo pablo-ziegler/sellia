@@ -51,7 +51,16 @@ sealed class Routes(val route: String) {
         fun withId(id: Long) = "sales_invoice_detail/$id"
     }
 
-
+    /**
+     * [NUEVO] Rutas claras para el flujo de venta con nested graph:
+     * - SELL_FLOW_ROUTE es el padre para compartir el MISMO SellViewModel.
+     * - SELL_SCREEN_ROUTE y CHECKOUT_SCREEN_ROUTE son sus destinos hijos.
+     */
+    object SellRoutes {
+        const val SELL_FLOW_ROUTE = "sell_flow"
+        const val SELL_SCREEN_ROUTE = "sell"
+        const val CHECKOUT_SCREEN_ROUTE = "checkout"
+    }
 
 
     /**

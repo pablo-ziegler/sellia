@@ -8,25 +8,26 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.navigation.NamedNavArgument
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.navigation.navigation
 import com.example.selliaapp.repository.CustomerRepository
-import com.example.selliaapp.repository.ProductRepository
 import com.example.selliaapp.ui.screens.HomeScreen
 import com.example.selliaapp.ui.screens.barcode.BarcodeScannerScreen
 import com.example.selliaapp.ui.screens.checkout.CheckoutScreen
@@ -65,22 +66,19 @@ import com.example.selliaapp.viewmodel.UserViewModel
 import com.example.selliaapp.viewmodel.sales.SalesInvoiceDetailViewModel
 import com.example.selliaapp.viewmodel.sales.SalesInvoicesViewModel
 
+
+ private const val SELL_FLOW_ROUTE = "sell_flow"
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SelliaApp(
     navController: NavHostController = rememberNavController(),
-    productRepo: ProductRepository,
-    customerRepo: CustomerRepository
+     customerRepo: CustomerRepository
 
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-    val haptics = LocalHapticFeedback.current
     val context = LocalContext.current
 
     // ViewModels inyectados por Hilt (scope de navegación)
-    val productViewModel: ProductViewModel = hiltViewModel()
-    val sellViewModel: SellViewModel = hiltViewModel()
     val userViewModel: UserViewModel = hiltViewModel()
 
 
@@ -147,55 +145,68 @@ fun SelliaApp(
 
 
 
-            // -------------------- VENDER -------------------------------
-            composable(Routes.Sell.route) {
-                // VMs para la pantalla de venta
-                val sellVm: SellViewModel = hiltViewModel()
-                val productVm: ProductViewModel = hiltViewModel()
+            // -------------------- FLUJO VENTA (scope compartido) -------
+            navigation(
+                startDestination = Routes.Sell.route,
+                route = SELL_FLOW_ROUTE
+            ) {
+                // VENDER
+                composable(Routes.Sell.route) {
+                    val sellVm: SellViewModel = hiltViewModel()
+                    val productVm: ProductViewModel = hiltViewModel()
 
-                // Escucha del retorno del escáner (vía SavedStateHandle)
-                val currentEntry = navController.currentBackStackEntry
-                val scannedCode by currentEntry
-                    ?.savedStateHandle
-                    ?.getStateFlow<String?>("scanned_code", null) // <- llave unificada
-                    ?.collectAsState(initial = null)
-                    ?: remember { mutableStateOf<String?>(null) }
+                    val currentEntry = navController.currentBackStackEntry
+                    val scannedCode by currentEntry
+                        ?.savedStateHandle
+                        ?.getStateFlow<String?>("scanned_code", null)
+                        ?.collectAsState(initial = null)
+                        ?: remember { mutableStateOf<String?>(null) }
 
-                LaunchedEffect(scannedCode) {
-                    scannedCode?.let { code ->
-                        // Intentamos resolver producto por barcode
-                        val product = productVm.getByBarcode(code)
-                        if (product != null) {
-                            sellVm.addToCart(product, 1)
-                        } else {
-                            // Si no existe, vamos al alta con el código prellenado
-                            navController.navigate(Routes.AddProduct.build(prefillBarcode = code)) // [NUEVO]
+                    LaunchedEffect(scannedCode) {
+                        scannedCode?.let { code ->
+                            val product = productVm.getByBarcode(code)
+                            if (product != null) {
+                                sellVm.addToCart(product, 1)
+                            } else {
+                                navController.navigate(Routes.AddProduct.build(prefillBarcode = code))
+                            }
+                            currentEntry?.savedStateHandle?.set("scanned_code", null)
                         }
-                        // Limpiar para no re-disparar
-                        currentEntry?.savedStateHandle?.set("scanned_code", null)
                     }
+
+                    SellScreen(
+                        sellVm = sellVm,
+                        productVm = productVm,
+                        onScanClick = { navController.navigate(Routes.ScannerForSell.route) },
+                        onBack = { navController.popBackStack() },
+                        navController = navController
+                    )
                 }
 
-                // Llamada a SellScreen (firma habitual: VM + back/scan)
-                SellScreen(
-                    sellVm = sellVm,
-                    productVm = productVm,
-                    onScanClick = { navController.navigate(Routes.ScannerForSell.route) },
-                    onBack = { navController.popBackStack() },
-                    navController = navController
-                )
+
+                // CHECKOUT (usa el MISMO VM del flujo con CompositionLocalProvider)
+                composable(Routes.Checkout.route) {
+                    val navBackStackEntry by navController.currentBackStackEntryAsState()
+                    val parentEntry = remember(navBackStackEntry) {
+                        navController.getBackStackEntry(SELL_FLOW_ROUTE) // ej.: "sell_flow"
+                    }
+                    CompositionLocalProvider(LocalViewModelStoreOwner provides parentEntry) {
+                        CheckoutScreen(
+                            onCancel = { navController.popBackStack() },
+                            navController = navController
+                        )
+                    }
+                }
             }
 
-
-            // Escáner para venta → devuelve "scanned_code"
+            // Escáner para venta → devuelve "scanned_code" (puede quedar fuera del flow)
             composable(Routes.ScannerForSell.route) {
                 BarcodeScannerScreen(
                     onClose = { navController.popBackStack() },
                     onDetected = { code ->
-                        // Guardar resultado para la pantalla anterior (Sell)
                         navController.previousBackStackEntry
                             ?.savedStateHandle
-                            ?.set("scanned_code", code) // <- llave unificada
+                            ?.set("scanned_code", code)
                         navController.popBackStack()
                     }
                 )
@@ -332,27 +343,6 @@ fun SelliaApp(
                         navController.popBackStack()
                     },
                     onCancel = { navController.popBackStack() }
-                )
-            }
-
-
-
-
-
-            // -------------------- CHECKOUT -----------------------------
-            composable(Routes.Checkout.route) {
-                CheckoutScreen(
-                    onFinished = { msg ->
-                        // Podés mostrar el mensaje si querés:
-                        if (!msg.isNullOrBlank()) {
-                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                        }
-                        // Volver a la pantalla anterior
-                        navController.popBackStack()
-                    },
-                    onCancel = {
-                        navController.popBackStack()
-                    }
                 )
             }
 

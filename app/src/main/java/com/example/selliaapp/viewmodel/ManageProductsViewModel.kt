@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import com.example.selliaapp.data.local.entity.ProductEntity
-import com.example.selliaapp.repository.ProductRepository
+import com.example.selliaapp.repository.IProductRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,7 +17,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-
 data class ManageProductsUiState(
     val query: String = "",
     val onlyLowStock: Boolean = false,
@@ -25,10 +24,9 @@ data class ManageProductsUiState(
     val onlyNoBarcode: Boolean = false
 )
 
-
 @HiltViewModel
 class ManageProductsViewModel @Inject constructor(
-    private val repo: ProductRepository
+    private val repo: IProductRepository
 ) : ViewModel() {
 
     // Estado UI (búsqueda + filtros)
@@ -44,6 +42,7 @@ class ManageProductsViewModel @Inject constructor(
                 val query = q.takeIf { it.isNotEmpty() } ?: ""
                 repo.pagingSearchFlow(query)
             }
+
     // Listado no paginado (si alguna UI lo necesita)
     val productsAll: Flow<List<ProductEntity>> = repo.observeAll()
 
