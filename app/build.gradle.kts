@@ -50,8 +50,14 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
-    //buildToolsVersion = "35.0.0"
-
+    // ⬇️ Kotlin DSL: usar "isReturnDefaultValues" (no "returnDefaultValues")
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+            // Si usás Robolectric:
+            // isIncludeAndroidResources = true
+        }
+    }
 
 }
 val cameraxVersion = "1.4.2" // estable al 16 Jul 2025
@@ -77,6 +83,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.storage)
     implementation(libs.firebase.crashlytics.buildtools)
+    implementation(libs.junit.junit)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -131,7 +138,6 @@ dependencies {
     kapt(libs.androidx.hilt.compiler)
 
     implementation(libs.zxing.android.embedded) // o última estable
-    implementation(libs.accompanist.permissions.v0340)
 
     implementation(libs.charts)
 
@@ -156,18 +162,25 @@ dependencies {
 
     implementation("io.coil-kt:coil-compose:2.7.0")
 
+    // --- Tests (unit) ---
+    testImplementation("junit:junit:4.13.2")
+    // Alineo coroutines a 1.9.0 (compat con Kotlin 2.1.x)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    testImplementation("com.google.truth:truth:1.1.5")
+    testImplementation("org.mockito:mockito-core:5.11.0")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
 
-
+    // --- AndroidTest (instrumented) ---
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
 }
 
 
 kapt {
     correctErrorTypes = true
     arguments {
-        // ⬇️ Directorio donde Room exporta los JSON del schema
         arg("room.schemaLocation", "$projectDir/schemas")
-
-        // Opcionales recomendados
         arg("room.incremental", "true")        // mejora tiempos de build
         arg("room.expandProjection", "true")   // ayuda con queries complejas
     }
@@ -179,3 +192,5 @@ configurations.all {
         }
     }
 }
+
+

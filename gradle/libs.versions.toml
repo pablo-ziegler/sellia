@@ -48,6 +48,7 @@ pagingCommonAndroid = "3.3.6"
 composeMaterial3 = "1.5.1"
 storage = "1.5.0"
 firebaseCrashlyticsBuildtools = "3.0.6"
+junitJunit = "4.12"
 
 
 [libraries]
@@ -106,6 +107,7 @@ androidx-paging-common-android = { group = "androidx.paging", name = "paging-com
 androidx-compose-material3 = { group = "androidx.wear.compose", name = "compose-material3", version.ref = "composeMaterial3" }
 androidx-storage = { group = "androidx.test.services", name = "storage", version.ref = "storage" }
 firebase-crashlytics-buildtools = { group = "com.google.firebase", name = "firebase-crashlytics-buildtools", version.ref = "firebaseCrashlyticsBuildtools" }
+junit-junit = { group = "junit", name = "junit", version.ref = "junitJunit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

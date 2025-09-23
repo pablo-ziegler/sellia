@@ -1,171 +1,111 @@
 package com.example.selliaapp.viewmodel
 
-
-import android.app.Application
+import android.content.Context
 import android.net.Uri
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.selliaapp.data.csv.ProductCsvImporter
-import com.example.selliaapp.data.dao.ProductDao
 import com.example.selliaapp.data.local.entity.ProductEntity
+import com.example.selliaapp.data.model.ImportResult
+import com.example.selliaapp.repository.IProductRepository
 import com.example.selliaapp.repository.ProductRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
-
-
-/**
- * Estado UI de la pantalla Stock: lista filtrada, query y toggles
- */
-data class StockUiState(
-    val query: String = "",
-    val onlyLowStock: Boolean = false,
-    val onlyNoStock: Boolean = false,
-    val products: List<ProductEntity> = emptyList()
-)
 
 
 @HiltViewModel
 class StockViewModel @Inject constructor(
-    private val productRepo: ProductRepository,
-    private val productDao: ProductDao,
-    app: Application
-) : AndroidViewModel(app) {
+    private val repo: IProductRepository
+) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(StockUiState())
-    val uiState: StateFlow<StockUiState> = _uiState.asStateFlow()
+    // ====== Listados / Búsquedas ======
 
-    init {
-        // Suscribimos el flujo base del repositorio y aplicamos filtros en memoria.
-        viewModelScope.launch {
-            productRepo.getProducts().collectLatest { list ->
-                applyFiltersAndPublish(list)
-            }
-        }
-    }
+    /** Listado principal para pantallas de stock (mantengo tu semántica). */
+    fun getProducts(): Flow<List<ProductEntity>> = repo.getProducts()
 
-    fun onQueryChange(q: String) {
-        _uiState.value = _uiState.value.copy(query = q)
-        viewModelScope.launch {
-            // Reaplicar sobre lo que haya en repo (ya llega por flow, pero forzamos recalcular con cache)
-            val current = productRepo.cachedOrEmpty()
-            applyFiltersAndPublish(current)
-        }
-    }
+    /** Búsqueda reactiva usada por pantallas con barra de búsqueda. */
+    fun search(q: String?): Flow<List<ProductEntity>> = repo.search(q)
 
-    fun onToggleLowStock() {
-        _uiState.value = _uiState.value.copy(onlyLowStock = !_uiState.value.onlyLowStock)
-        viewModelScope.launch {
-            applyFiltersAndPublish(productRepo.cachedOrEmpty())
-        }
-    }
+    /** Categorías / Proveedores para filtros o pickers. */
+    fun getAllCategoryNames(): Flow<List<String>> = repo.distinctCategories()
+    fun getAllProviderNames(): Flow<List<String>> = repo.distinctProviders()
 
-    fun onToggleNoStock() {
-        _uiState.value = _uiState.value.copy(onlyNoStock = !_uiState.value.onlyNoStock)
-        viewModelScope.launch {
-            applyFiltersAndPublish(productRepo.cachedOrEmpty())
-        }
-    }
+    // ====== Lecturas puntuales ======
+
+    /** Cache rápida en memoria (delegado al repo). */
+    suspend fun cachedOrEmpty(): List<ProductEntity> = repo.cachedOrEmpty()
+
+    /** Obtener un producto por código de barras (o null si no existe). */
+    suspend fun getByBarcodeOrNull(barcode: String): ProductEntity? =
+        repo.getByBarcodeOrNull(barcode)
+
+    // ====== Importación CSV ======
+
+    /** Simula importación sin escribir en DB (dry-run). */
+    suspend fun simulateImport(context: Context, fileUri: Uri): ImportResult =
+        repo.simulateImport(context, fileUri)
 
     /**
-     * Importa productos/stock desde un CSV (Excel/Sheets exportan a CSV).
-     * - Actualiza productos existentes por code/barcode si coincide
-     * - Inserta nuevos si no existen
+     * Importa con estrategia (Append/Replace) escribiendo en DB.
+     * Devuelve resumen (insertados/actualizados/errores).
      */
-    suspend fun importFromCsvUri(uri: Uri): Result<Unit> {
-        return try {
-            val ctx = getApplication<Application>()
-            val rows = ctx.contentResolver.openInputStream(uri).use { input ->
-                if (input == null) error("No se pudo abrir el archivo")
-                ProductCsvImporter.parseCsv(input)
-            }
-            // Delegamos al repo la lógica de upsert masivo
-            productRepo.bulkUpsert(rows)
-            Result.success(Unit)
-        } catch (t: Throwable) {
-            Result.failure(t)
-        }
-    }
+    suspend fun importProductsFromCsv(
+        context: Context,
+        fileUri: Uri,
+        strategy: ProductRepository.ImportStrategy
+    ): ImportResult = repo.importProductsFromCsv(context, fileUri, strategy)
 
-    // ---- Internos ----
+    /** Encola importación en background con WorkManager. */
+    fun importProductsInBackground(context: Context, fileUri: Uri) =
+        repo.importProductsInBackground(context, fileUri)
 
-    private fun applyFiltersAndPublish(source: List<ProductEntity>) {
-        val st = _uiState.value
-        val q = st.query.trim().lowercase()
+    // ====== Bulk desde filas parseadas (flujo avanzado) ======
 
-        val filtered = source.asSequence()
-            .filter { p ->
-                if (q.isBlank()) true
-                else (p.name.lowercase().contains(q)
-                        || (p.code?.lowercase()?.contains(q) == true)
-                        || (p.barcode?.lowercase()?.contains(q) == true))
-            }
-            .filter { p ->
-                if (st.onlyNoStock) p.quantity == 0 else true
-            }
-            .filter { p ->
-                if (st.onlyLowStock) {
-                    val min = p.minStock ?: 0
-                    p.quantity <= min
-                } else true
-            }
-            .sortedWith(compareBy<ProductEntity> { it.name.lowercase() }.thenBy { it.code ?: "" })
-            .toList()
+    /** Inserta/actualiza en bloque una lista de filas ya parseadas. */
+    suspend fun bulkUpsert(rows: List<com.example.selliaapp.data.csv.ProductCsvImporter.Row>) =
+        repo.bulkUpsert(rows)
 
-        _uiState.value = st.copy(products = filtered)
-    }
+    // ====== Escaneo de stock ======
 
-
+    /** Resultado simple para integración con UI de escaneo. */
+    data class ScanResult(val foundId: Int?, val prefillBarcode: String, val name: String? = null)
 
     /**
-     * Lógica al confirmar el agregado por escaneo.
-     * onSuccess: devuelve nombre o algún dato útil (si lo necesitás en el UI).
+     * Consulta si un barcode existe. Si existe → foundId != null y devolvemos nombre para UI.
+     * Si no existe → devolvemos el mismo barcode para precargar en alta.
+     */
+    suspend fun onScanBarcode(barcode: String): ScanResult = withContext(Dispatchers.IO) {
+        val p = repo.getByBarcodeOrNull(barcode)
+        if (p != null) ScanResult(foundId = p.id, prefillBarcode = barcode, name = p.name)
+        else ScanResult(foundId = null, prefillBarcode = barcode, name = null)
+    }
+
+    /**
+     * Suma stock por código de barras.
+     * - onSuccess: se actualizó la cantidad.
+     * - onNotFound: no existe el producto (abrir alta).
+     * - onError: error inesperado.
      */
     fun addStockByScan(
         barcode: String,
         qty: Int,
-        onSuccess: (String?) -> Unit = {},
+        onSuccess: () -> Unit = {},
         onNotFound: () -> Unit = {},
         onError: (Throwable) -> Unit = {}
     ) {
         viewModelScope.launch {
             try {
-                val product = productRepo.getByBarcodeOrNull(barcode)
-                if (product == null) {
-                    onNotFound()
-                    return@launch
+                val ok = withContext(Dispatchers.IO) {
+                    // Usa API dedicada si existe; si no, la genérica de update por delta.
+                    repo.increaseStockByBarcode(barcode = barcode, delta = qty)
                 }
-                val ok = productRepo.increaseStockByBarcode(barcode, qty)
-                if (ok) {
-                    onSuccess(product.name)
-                } else {
-                    onError(IllegalStateException("No se pudo actualizar el stock"))
-                }
-            } catch (e: Throwable) {
-                onError(e)
+                if (ok) onSuccess() else onNotFound()
+            } catch (t: Throwable) {
+                onError(t)
             }
         }
     }
-
-    // LÓGICA DE ESCÁNER INTELIGENTE (F3)
-    data class ScanResult(
-        val foundId: Int?,     // id del producto si existe
-        val prefillBarcode: String?
-    )
-
-    suspend fun onScanBarcode(barcode: String): ScanResult {
-        val existing = productDao.getByBarcodeOnce(barcode)
-        return if (existing != null) {
-            ScanResult(foundId = existing.id, prefillBarcode = null)
-        } else {
-            // No existe: navegamos a ALTA con barcode precargado
-            ScanResult(foundId = null, prefillBarcode = barcode)
-        }
-    }
-
-
 }

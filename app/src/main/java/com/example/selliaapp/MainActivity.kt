@@ -35,7 +35,6 @@ class MainActivity : ComponentActivity() {
             Surface(color = MaterialTheme.colorScheme.background) {
                 SelliaApp(
                     navController = navController,
-                    productRepo = productRepository,
                     customerRepo = customerRepository
                 )
             }

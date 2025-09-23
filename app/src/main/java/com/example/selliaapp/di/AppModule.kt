@@ -106,9 +106,6 @@ object AppModule {
     @Singleton
     fun provideProviderDao(db: AppDatabase): ProviderDao = db.providerDao()
 
-    // --------- Firebase ---------
-    @Provides @Singleton
-    fun provideFirebaseFirestore(): FirebaseFirestore = FirebaseFirestore.getInstance()
 
     // -----------------------------
     // REPOSITORIES
