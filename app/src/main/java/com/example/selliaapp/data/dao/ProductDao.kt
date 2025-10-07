@@ -9,6 +9,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import com.example.selliaapp.data.local.entity.ProductEntity
+import com.example.selliaapp.data.model.dashboard.LowStockProduct
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
 
@@ -48,6 +49,26 @@ interface ProductDao {
         ORDER BY name COLLATE NOCASE ASC
     """)
     fun search(term: String?): Flow<List<ProductEntity>>
+
+    /**
+     * Devuelve los productos con stock igual o por debajo del mínimo configurado.
+     * Ordena por la mayor falta de stock para priorizar reposiciones.
+     */
+    @Query(
+        """
+        SELECT id,
+               name,
+               quantity,
+               COALESCE(minStock, 0) AS minStock
+        FROM products
+        WHERE minStock IS NOT NULL
+          AND quantity <= minStock
+        ORDER BY (COALESCE(minStock, 0) - quantity) DESC,
+                 name COLLATE NOCASE ASC
+        LIMIT :limit
+        """
+    )
+    fun observeLowStock(limit: Int): Flow<List<LowStockProduct>>
 
     // --------- Escrituras ---------
 

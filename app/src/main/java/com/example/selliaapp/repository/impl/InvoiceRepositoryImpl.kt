@@ -7,8 +7,9 @@ import com.example.selliaapp.data.dao.InvoiceDao
 import com.example.selliaapp.data.dao.InvoiceWithItems
 import com.example.selliaapp.data.dao.ProductDao
  import com.example.selliaapp.data.local.entity.StockMovementEntity
- import com.example.selliaapp.data.model.Invoice
+import com.example.selliaapp.data.model.Invoice
 import com.example.selliaapp.data.model.InvoiceItem
+import com.example.selliaapp.data.model.dashboard.DailySalesPoint
 import com.example.selliaapp.data.model.sales.InvoiceDetail
 import com.example.selliaapp.data.model.sales.InvoiceDraft
 import com.example.selliaapp.data.model.sales.InvoiceItemRow
@@ -20,7 +21,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
- import java.time.Instant
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import javax.inject.Inject
@@ -116,21 +117,53 @@ import javax.inject.Singleton
      // ----------------------------
      // Reporte simple
      // ----------------------------
-     override suspend fun sumThisMonth(): Double = withContext(io) {
-         val today = LocalDate.now()
-         val start = today.withDayOfMonth(1)
-             .atStartOfDay(ZoneId.systemDefault())
-             .toInstant()
-             .toEpochMilli()
-         val end = today.plusMonths(1)
-             .withDayOfMonth(1)
-             .minusDays(1)
-             .atTime(23, 59, 59)
-             .atZone(ZoneId.systemDefault())
-             .toInstant()
-             .toEpochMilli()
-         invoiceDao.sumTotalBetween(start, end)
-     }
+    override suspend fun sumThisMonth(): Double = withContext(io) {
+        val today = LocalDate.now()
+        val start = today.withDayOfMonth(1)
+            .atStartOfDay(ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
+        val end = today.plusMonths(1)
+            .withDayOfMonth(1)
+            .minusDays(1)
+            .atTime(23, 59, 59)
+            .atZone(ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
+        invoiceDao.sumTotalBetween(start, end)
+    }
+
+    override suspend fun salesLastDays(dias: Int): List<DailySalesPoint> = withContext(io) {
+        require(dias > 0) { "El número de días debe ser positivo" }
+
+        val zona = ZoneId.systemDefault()
+        val hoy = LocalDate.now(zona)
+        val inicioSerie = hoy.minusDays((dias - 1).toLong())
+
+        val inicioMillis = inicioSerie
+            .atStartOfDay(zona)
+            .toInstant()
+            .toEpochMilli()
+
+        val finMillis = hoy
+            .plusDays(1)
+            .atStartOfDay(zona)
+            .toInstant()
+            .toEpochMilli() - 1
+
+        val registros = invoiceDao.salesGroupedByDay(inicioMillis, finMillis)
+        val totalesPorDia = registros.associateBy(
+            keySelector = { row ->
+                Instant.ofEpochMilli(row.day).atZone(zona).toLocalDate()
+            }
+        )
+
+        (0 until dias).map { offset ->
+            val fecha = inicioSerie.plusDays(offset.toLong())
+            val total = totalesPorDia[fecha]?.total ?: 0.0
+            DailySalesPoint(fecha = fecha, total = total)
+        }
+    }
 
      // ----------------------------
      // Mappers

@@ -24,11 +24,23 @@ data class CartItemUi(
 data class SellUiState(
     val items: List<CartItemUi> = emptyList(),
     val subtotal: Double = 0.0,
+    val discountPercent: Int = 0,
+    val discountAmount: Double = 0.0,
+    val surchargePercent: Int = 0,
+    val surchargeAmount: Double = 0.0,
     val total: Double = 0.0,
     /** Mapa de violaciones: productId -> stockDisponible (cuando qty > stock) */
-    val stockViolations: Map<Int, Int> = emptyMap()
+    val stockViolations: Map<Int, Int> = emptyMap(),
+    val paymentMethod: PaymentMethod = PaymentMethod.EFECTIVO,
+    val paymentNotes: String = ""
 ) {
     /** Habilita el checkout si no hay violaciones y hay al menos un ítem. */
     val canCheckout: Boolean
         get() = stockViolations.isEmpty() && items.isNotEmpty()
+}
+
+enum class PaymentMethod {
+    EFECTIVO,
+    TARJETA,
+    TRANSFERENCIA
 }

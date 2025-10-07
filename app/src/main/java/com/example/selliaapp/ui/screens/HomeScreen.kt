@@ -1,4 +1,3 @@
-// File: HomeScreen.kt
 package com.example.selliaapp.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
@@ -22,6 +21,7 @@ import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.InsertChart
 import androidx.compose.material.icons.filled.PointOfSale
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.Store
@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Divider
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -46,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import com.example.selliaapp.viewmodel.HomeViewModel
 import java.text.NumberFormat
 import java.util.Locale
+import java.time.format.DateTimeFormatter
 
 /**
  * Pantalla principal con búsqueda, accesos rápidos y listado de ventas recientes.
@@ -64,7 +66,9 @@ fun HomeScreen(
     onSyncNow: () -> Unit = {}
     ) {
     val state by vm.state.collectAsState()
-    val currency = NumberFormat.getCurrencyInstance(Locale("es", "AR"))
+    val localeEsAr = Locale("es", "AR")
+    val currency = NumberFormat.getCurrencyInstance(localeEsAr)
+    val dayFormatter = DateTimeFormatter.ofPattern("EEE d", localeEsAr)
 
     Box(modifier = Modifier.fillMaxSize()) {
 
@@ -79,6 +83,24 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
 
         ) {
+            state.errorMessage?.let { mensaje ->
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = mensaje,
+                        modifier = Modifier.padding(16.dp),
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+
             ElevatedCard {
                 Row(
                     Modifier
@@ -104,15 +126,124 @@ fun HomeScreen(
             }
 
             Card(elevation = CardDefaults.cardElevation(2.dp)) {
-                Row(
-                    Modifier
+                Column(
+                    modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Icon(Icons.Default.ShowChart, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Ventas de la semana")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.ShowChart, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "Ventas de los últimos 7 días",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+
+                    if (state.weekSales.isEmpty()) {
+                        Text(
+                            text = "Aún no hay ventas registradas en esta semana.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        state.weekSales.forEach { punto ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                val etiqueta = punto.fecha.format(dayFormatter).replaceFirstChar { ch ->
+                                    if (ch.isLowerCase()) ch.titlecase(localeEsAr) else ch.toString()
+                                }
+                                Text(
+                                    text = etiqueta,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    text = currency.format(punto.total),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+
+                        Divider()
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Total semanal",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            val totalSemana = state.weekSales.sumOf { it.total }
+                            Text(
+                                text = currency.format(totalSemana),
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                        }
+                    }
+                }
+            }
+
+            Card(elevation = CardDefaults.cardElevation(2.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "Alertas de stock",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+
+                    if (state.lowStockAlerts.isEmpty()) {
+                        Text(
+                            text = "Sin alertas: el stock está dentro de los mínimos.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        state.lowStockAlerts.forEachIndexed { index, alert ->
+                            if (index > 0) {
+                                Divider()
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = alert.name,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "Stock ${alert.quantity} / mínimo ${alert.minStock}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    text = "Faltan ${alert.deficit}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
                 }
             }
 

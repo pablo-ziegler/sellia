@@ -1,13 +1,5 @@
 package com.example.selliaapp.ui.screens.sell
 
-/* [ANTERIOR]
-package com.example.selliaapp.ui.screens.sell
-
-<< PEGASTE ESTA VERSIÓN (con referencias a state.cart / state.error / state.lastInvoiceId).
-   La conservo como bloque comentado para que compares. >>
-... (TU ARCHIVO ANTERIOR COMPLETO) ...
-*/
-
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -30,6 +22,7 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -37,6 +30,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -66,6 +61,7 @@ import com.example.selliaapp.viewmodel.SellViewModel
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * Pantalla de ventas (unificada a `ui`):
@@ -88,12 +84,12 @@ fun SellScreen(
     val currency = remember { NumberFormat.getCurrencyInstance(Locale("es", "AR")) }
 
 
-    // 👉 Agrego SnackbarHostState y CoroutineScope para mostrar mensajes (FIX a "Unresolved reference")
+    // Estado para mostrar mensajes en pantalla
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
 
-    // Stock remanente por producto (stock total - cantidad en carrito)
+    // Stock remanente por producto (stock total menos cantidad en carrito)
     val remainingById = remember(ui.items, allProducts) {
         val qtyById = ui.items.associate { it.productId to it.qty }
         allProducts.associate { p ->
@@ -102,7 +98,7 @@ fun SellScreen(
         }
     }
 
-    // Picker + diálogo
+    // Selección de productos y diálogo de cantidad
     var showPicker by remember { mutableStateOf(false) }
     var askFor by remember { mutableStateOf<ProductEntity?>(null) }
 
@@ -122,7 +118,7 @@ fun SellScreen(
         QuantityInputDialog(
             title = if (current > 0) "Nueva cantidad" else "Cantidad a vender",
             initialValue = initial,
-            maxValue = remaining,                 // << límite de stock para validación live
+            maxValue = remaining,
             confirmText = if (current > 0) "Actualizar" else "Agregar",
             cancelText = "Cancelar",
             onConfirm = { qty ->
@@ -149,7 +145,6 @@ fun SellScreen(
                 Icon(Icons.Default.Add, contentDescription = "Escanear/Agregar")
             }
         },
-        // 👉 Conecto el snackbarHostState al Scaffold (antes se creaba ad-hoc y no era accesible)
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(
@@ -186,23 +181,44 @@ fun SellScreen(
                         )
                         Spacer(Modifier.height(8.dp))
                     }
-                    // Resumen de totales
                     item {
                         Card(
                             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(Modifier.padding(16.dp)) {
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Subtotal", style = MaterialTheme.typography.bodyMedium)
-                                    Text(currency.format(ui.subtotal), style = MaterialTheme.typography.bodyMedium)
-                                }
-                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = "Resumen de la venta",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                ResumenRow(
+                                    etiqueta = "Subtotal",
+                                    valor = currency.format(ui.subtotal)
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                PorcentajeControl(
+                                    titulo = "Descuento",
+                                    valor = ui.discountPercent,
+                                    onValorChange = { sellVm.setDiscountPercent(it) },
+                                    descripcion = if (ui.discountPercent == 0) "Sin descuento" else "-" + currency.format(ui.discountAmount),
+                                    colorDescripcion = if (ui.discountPercent == 0) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF2E7D32)
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                PorcentajeControl(
+                                    titulo = "Recargo",
+                                    valor = ui.surchargePercent,
+                                    onValorChange = { sellVm.setSurchargePercent(it) },
+                                    descripcion = if (ui.surchargePercent == 0) "Sin recargo" else "+" + currency.format(ui.surchargeAmount),
+                                    colorDescripcion = if (ui.surchargePercent == 0) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFFB71C1C)
+                                )
+                                Spacer(Modifier.height(12.dp))
                                 Divider(Modifier.padding(vertical = 4.dp))
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Total", style = MaterialTheme.typography.titleMedium)
-                                    Text(currency.format(ui.total), style = MaterialTheme.typography.titleMedium)
-                                }
+                                ResumenRow(
+                                    etiqueta = "Total a cobrar",
+                                    valor = currency.format(ui.total),
+                                    resaltar = true
+                                )
                                 if (!ui.canCheckout) {
                                     Spacer(Modifier.height(6.dp))
                                     Text("Hay cantidades inválidas en el carrito.", color = Color.Red)
@@ -211,7 +227,6 @@ fun SellScreen(
                         }
                     }
 
-                    // Botón: Scanear producto
                     item {
                         Button(
                             onClick = onScanClick,
@@ -231,7 +246,6 @@ fun SellScreen(
                         }
                     }
 
-                    // Botón: Vender
                     item {
                         Button(
                             onClick = {
@@ -246,14 +260,17 @@ fun SellScreen(
                                         snackbarHostState.showSnackbar(msg)
                                     }
                                 } else {
-                                    // 👉 Ir al flujo de cobro que ya tenés implementado
                                     navController.navigate(Routes.Checkout.route)
                                 }
                             },
-                            enabled = ui.items.isNotEmpty(), // si hay items
-                            modifier = Modifier.fillMaxWidth()
+                            enabled = ui.items.isNotEmpty(),
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                            )
                         ) {
-                            Text("Finalizar venta")
+                            Text("Ir a cobrar")
                         }
                     }
                 }
@@ -333,6 +350,56 @@ fun CartItemRow(
                 Text("Llegaste al stock máximo disponible.", color = Color(0xFFCC7700))
             }
         }
+    }
+}
+
+@Composable
+private fun ResumenRow(etiqueta: String, valor: String, resaltar: Boolean = false) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = etiqueta,
+            style = if (resaltar) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium
+        )
+        Text(
+            text = valor,
+            style = if (resaltar) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium,
+            color = if (resaltar) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+@Composable
+private fun PorcentajeControl(
+    titulo: String,
+    valor: Int,
+    onValorChange: (Int) -> Unit,
+    descripcion: String,
+    colorDescripcion: Color
+) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(titulo, style = MaterialTheme.typography.bodyMedium)
+            Text("$valor%", style = MaterialTheme.typography.bodyMedium)
+        }
+        Slider(
+            value = valor.toFloat(),
+            onValueChange = { onValorChange(it.roundToInt()) },
+            valueRange = 0f..50f,
+            steps = 49,
+            colors = SliderDefaults.colors(
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+            )
+        )
+        Text(descripcion, color = colorDescripcion, style = MaterialTheme.typography.bodySmall)
     }
 }
 

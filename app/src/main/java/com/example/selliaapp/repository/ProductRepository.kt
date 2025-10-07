@@ -19,6 +19,7 @@ import com.example.selliaapp.data.local.entity.ProductEntity
 import com.example.selliaapp.data.mappers.toModel
 import com.example.selliaapp.data.model.ImportResult
 import com.example.selliaapp.data.model.Product
+import com.example.selliaapp.data.model.dashboard.LowStockProduct
 import com.example.selliaapp.data.remote.ProductRemoteDataSource
 import com.example.selliaapp.di.IoDispatcher
 import com.example.selliaapp.sync.CsvImportWorker
@@ -360,6 +361,10 @@ class ProductRepository(
 
     /** Listado reactivo de proveedores distintos. */
     fun distinctProviders(): Flow<List<String>> = productDao.distinctProviders()
+
+    /** Top-N de productos con stock crítico para el dashboard. */
+    fun lowStockAlerts(limit: Int = 5): Flow<List<LowStockProduct>> =
+        productDao.observeLowStock(limit)
 
     /** Alta de producto (alias más semántico para la UI). */
     suspend fun addProduct(p: ProductEntity): Int = add(p)

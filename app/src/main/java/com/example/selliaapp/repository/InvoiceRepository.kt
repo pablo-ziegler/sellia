@@ -4,6 +4,7 @@ import com.example.selliaapp.data.dao.InvoiceWithItems
 import com.example.selliaapp.data.model.Invoice
 import com.example.selliaapp.data.model.InvoiceItem
 import com.example.selliaapp.data.model.sales.InvoiceDetail
+import com.example.selliaapp.data.model.dashboard.DailySalesPoint
 import com.example.selliaapp.data.model.sales.InvoiceDraft
 import com.example.selliaapp.data.model.sales.InvoiceResult
 import com.example.selliaapp.data.model.sales.InvoiceSummary
@@ -39,8 +40,10 @@ interface InvoiceRepository {
     // Escritura (compatibilidad con VM antiguos)
     suspend fun addInvoiceAndAdjustStock(invoice: Invoice, items: List<InvoiceItem>)
 
-    // Reporte simple
+    // Reportes simples para el tablero
     suspend fun sumThisMonth(): Double
+
+    suspend fun salesLastDays(dias: Int): List<DailySalesPoint>
 }
 
 
