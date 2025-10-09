@@ -45,6 +45,7 @@ import com.example.selliaapp.ui.screens.manage.SyncScreen
 import com.example.selliaapp.ui.screens.providers.ManageProvidersScreen
 import com.example.selliaapp.ui.screens.providers.ProviderInvoiceDetailScreen
 import com.example.selliaapp.ui.screens.providers.ProviderInvoicesScreen
+import com.example.selliaapp.sync.SyncScheduler
 import com.example.selliaapp.ui.screens.providers.ProviderPaymentsScreen
 import com.example.selliaapp.ui.screens.providers.ProvidersHubScreen
 import com.example.selliaapp.ui.screens.reports.ReportsScreen
@@ -106,8 +107,15 @@ fun SelliaApp(
                     onReports = { navController.navigate(Routes.Reports.route) },
                     onProviders = { navController.navigate(Routes.ProvidersHub.route) },   // NUEVO
                     onExpenses = { navController.navigate(Routes.ExpensesHub.route) },
+                    onSyncNow = { SyncScheduler.enqueueNow(context) },
+                    onAlertAdjustStock = { productId ->
+                        navController.navigate(Routes.AddProduct.withId(productId.toLong()))
+                    },
+                    onAlertCreatePurchase = {
+                        navController.navigate(Routes.ProviderInvoices.route)
+                    },
                     vm = homeVm,
-
+ 
                 )
             }
 

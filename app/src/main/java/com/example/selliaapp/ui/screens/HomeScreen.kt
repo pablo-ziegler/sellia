@@ -34,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -59,7 +60,9 @@ fun HomeScreen(
     onReports: () -> Unit,
     onProviders: () -> Unit,          // NUEVO
     onExpenses: () -> Unit,
-    onSyncNow: () -> Unit = {}
+    onSyncNow: () -> Unit = {},
+    onAlertAdjustStock: (Int) -> Unit = {},
+    onAlertCreatePurchase: (Int) -> Unit = {}
     ) {
     val state by vm.state.collectAsState()
     val localeEsAr = Locale("es", "AR")
@@ -194,26 +197,44 @@ fun HomeScreen(
                             if (index > 0) {
                                 Divider()
                             }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Column(modifier = Modifier.weight(1f)) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = alert.name,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "Stock ${alert.quantity} / mínimo ${alert.minStock}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Spacer(Modifier.width(12.dp))
                                     Text(
-                                        text = alert.name,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = "Stock ${alert.quantity} / mínimo ${alert.minStock}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        text = "Faltan ${alert.deficit}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.error
                                     )
                                 }
-                                Spacer(Modifier.width(12.dp))
-                                Text(
-                                    text = "Faltan ${alert.deficit}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.error
-                                )
+                                Spacer(Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    TextButton(onClick = { onAlertAdjustStock(alert.id) }) {
+                                        Text("Ajustar stock")
+                                    }
+                                    TextButton(onClick = { onAlertCreatePurchase(alert.id) }) {
+                                        Text("Crear orden")
+                                    }
+                                }
                             }
                         }
                     }
